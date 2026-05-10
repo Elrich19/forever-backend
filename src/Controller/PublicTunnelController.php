@@ -10,7 +10,17 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 
-#[Route('/api/public')]
+/**
+ * Routes publiques (sans auth) du shop.
+ *
+ * IMPORTANT — pourquoi /api/site et pas /api/public :
+ * Sur la prod Hostinger, l'index.php de Symfony se trouve dans api/public/.
+ * Symfony auto-détecte sa BASE en prenant le dirname du SCRIPT_NAME → /api/public.
+ * Toute URL qui commence par /api/public se voit alors stripper son préfixe par
+ * Symfony, donc une route définie #[Route('/api/public/...')] ne match jamais.
+ * En utilisant /api/site/ on évite la collision.
+ */
+#[Route('/api/site')]
 class PublicTunnelController
 {
     public function __construct(
@@ -18,12 +28,15 @@ class PublicTunnelController
         private readonly TunnelRepository $tunnels,
     ) {}
 
-    #[Route('/tunnels/{slug}', methods: ['GET'])]
+    #[Route('/{slug}', methods: ['GET'])]
     public function show(string $slug): JsonResponse
     {
         $t = $this->tunnels->findOneBySlug($slug);
-        if (!$t || $t->getStatut() !== \App\Entity\Tunnel::STATUT_PUBLIE) {
-            return new JsonResponse(['error' => 'Tunnel introuvable.'], 404);
+        if (!$t) {
+            return new JsonResponse(['error' => 'Aucun tunnel avec ce slug.', 'reason' => 'not_found'], 404);
+        }
+        if ($t->getStatut() !== \App\Entity\Tunnel::STATUT_PUBLIE) {
+            return new JsonResponse(['error' => 'Ce tunnel n\'est pas publié.', 'reason' => 'not_published'], 404);
         }
 
         $d = $t->getDistributeur();
@@ -56,7 +69,7 @@ class PublicTunnelController
         ]);
     }
 
-    #[Route('/tunnels/{slug}/visite', methods: ['POST'])]
+    #[Route('/{slug}/visite', methods: ['POST'])]
     public function trackVisite(string $slug, Request $request): JsonResponse
     {
         $t = $this->tunnels->findOneBySlug($slug);
@@ -72,7 +85,7 @@ class PublicTunnelController
         return new JsonResponse(['ok' => true], 201);
     }
 
-    #[Route('/tunnels/{slug}/prospects', methods: ['POST'])]
+    #[Route('/{slug}/prospects', methods: ['POST'])]
     public function submitProspect(string $slug, Request $request): JsonResponse
     {
         $t = $this->tunnels->findOneBySlug($slug);
