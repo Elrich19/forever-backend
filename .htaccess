@@ -1,0 +1,47 @@
+# ===================================================================
+# .htaccess à placer dans public_html/api/  (racine du backend Symfony)
+# ===================================================================
+# Symfony attend ses requêtes via public/index.php. Or sur Hostinger
+# le DocumentRoot pointe vers public_html/, donc /api/ correspond à la
+# racine du projet (vendor, src, config, public, ...).
+#
+# Ce fichier :
+#   1) Bloque l'accès aux dossiers internes (vendor/, var/, src/, config/, ...)
+#   2) Force le passage du header Authorization (JWT) à PHP
+#   3) Délègue toutes les requêtes /api/xxx à public/index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # ---------------------------------------------------------------
+    # 1) Sécurité : on interdit l'accès direct aux fichiers internes
+    # ---------------------------------------------------------------
+    RewriteRule ^(vendor|var|src|config|migrations|tests|bin)(/|$) - [F,L]
+    RewriteRule ^(\.env|\.env\..*|composer\.(json|lock)|symfony\.lock|README\.md|\.gitignore)$ - [F,L]
+
+    # ---------------------------------------------------------------
+    # 2) Header Authorization : Apache + PHP-FPM le suppriment souvent
+    # ---------------------------------------------------------------
+    RewriteCond %{HTTP:Authorization} .+
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%0]
+
+    # ---------------------------------------------------------------
+    # 3) Si la requête vise déjà public/, on ne fait rien (Symfony gère)
+    # ---------------------------------------------------------------
+    RewriteRule ^public(/|$) - [L]
+
+    # ---------------------------------------------------------------
+    # 4) Tout le reste → public/index.php (front controller Symfony)
+    # ---------------------------------------------------------------
+    RewriteRule ^(.*)$ public/index.php [QSA,L]
+</IfModule>
+
+# Bloque aussi par configuration directe en cas de mod_rewrite indispo
+<IfModule !mod_rewrite.c>
+    <FilesMatch "\.env">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+# Empêche l'autoindex sur les dossiers
+Options -Indexes
